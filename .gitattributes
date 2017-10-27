@@ -1,0 +1,13 @@
+*.c linguist-language=C
+*.h linguist-language=C
+*.cdata linguist-language=C
+*.asm linguist-language=Assembly
+*.s linguist-language=Assembly
+*.S linguist-language=Assembly
+Makefile.* linguist-language=Makefile
+Makefile linguist-language=Makefile
+*.mak linguist-language=Makefile
+*.make linguist-language=Makefile
+*.py linguist-language=Python
+*.vhdl linguist-language=VHDL
+*.vhd linguist-language=VHDL
