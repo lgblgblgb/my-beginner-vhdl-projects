@@ -56,6 +56,8 @@ signal bus_add:	 std_logic_vector (7 downto 0);
 alias  bus_rem:    std_logic_vector (9 downto 0) is bus_in( 9 downto  0);
 
 constant TEN_ZEROS:std_logic_vector (9 downto 0) := "0000000000";
+
+-- Actually, MMU modes cannot be "seen" from outside, so it's totally OK to have any enumeration of the modes ...
 constant KERN_MODE:std_logic_vector (1 downto 0) := "00";
 constant APPL_MODE:std_logic_vector (1 downto 0) := "01";
 constant RAM_MODE: std_logic_vector (1 downto 0) := "10";
@@ -68,8 +70,9 @@ signal bus_out: std_logic_vector (17 downto 0);
 begin
 
 bus_add <= "00" & bus_in(15 downto 10);
+bus_translated <= bus_out;
 
-process (clk, bus_in, rw_n) begin
+process (clk, bus_in, rw_n, data_in) begin
 	if rising_edge(clk) then
 		case bus_in(15 downto 14) is
 			when "00" =>	-- *** FIRST 16K of 65xx address space ***
@@ -96,7 +99,7 @@ process (clk, bus_in, rw_n) begin
 				mem_cs_n <= '0';
 			when "10" =>	-- *** THIRD 16K of 65xx address space ***
 				case mode is
-					when KERN_MODE => bus_out <= "11" & bus_in(15 downto 0);
+					when KERN_MODE => bus_out <= "11" & bus_in;
 					when APPL_MODE => bus_out <= (bus_add + offset3) & bus_rem;
 					when RAM_MODE  => bus_out <= "00" & bus_in;
 					when TEST_MODE => bus_out <= TEN_ZEROS & offset3;
@@ -104,22 +107,26 @@ process (clk, bus_in, rw_n) begin
 				end case;
 				mem_cs_n <= '0';
 			when "11" =>	-- *** FOURTH 16K of 65xx address space ***
-				if (bus_in(13 downto 9) /= "11100") or (rw_n = '1' and (bus_in(15 downto 8) > x"F9")) then
+				if bus_in(13 downto 11) = "111" then	-- upper 2K: (15 downto 14) is already "11" here!
+					bus_out <= "11" & bus_in;	-- "redirected" to the top of KERNAL (if the decoded area is I/O: no problem as the "new" MS bits won't used)
+					if rw_n = '0' or bus_in(10 downto 9) = "00" then
+						-- write access here is always I/O, but also read access for $F800-$F9FF is I/O!
+						mem_cs_n <= '1';	-- not a memory access, it's I/O!
+					else
+						mem_cs_n <= '0';
+					end if;
+				else
 					case mode is
-						when KERN_MODE => bus_out <= "11" & bus_in(15 downto 0);
+						when KERN_MODE => bus_out <= "11" & bus_in;
 						when APPL_MODE => bus_out <= (bus_add + offset4) & bus_rem;
 						when RAM_MODE  => bus_out <= "00" & bus_in;
 						when TEST_MODE => bus_out <= TEN_ZEROS & offset4;	-- btw this is wrong, however TEST mode is unusable for anything other than HW testing
 						when others =>
 					end case;
 					mem_cs_n <= '0';
-				else
-					bus_out <= "00" & bus_in;
-					mem_cs_n <= '1';	-- NOT a memory access!
 				end if;
 			when others =>
 		end case;
-		bus_translated <= bus_out;
 		-- Produce various memory access related signals
 		if mem_cs_n = '0' and rw_n = '1' and bus_out(17) = '0' then
 			ram_oe_n <= '0';

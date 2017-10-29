@@ -33,8 +33,8 @@ def doit(arg, in_stream, out_stream):
 				if files:
 					dump_data(out_stream, files[in_context])
 				else:
-					print("-- DATA IS STRIPPED OUT")
-				print(line.rstrip())
+					out_stream.write("-- DATA IS STRIPPED OUT\n")
+				out_stream.write(line)
 				in_context = ""
 			else:
 				if len(a) < 3:
@@ -51,9 +51,9 @@ def doit(arg, in_stream, out_stream):
 						return "Wrong size element \"" + a[2] + "\" in line " + str(lineno)
 					if size != len(files[in_context]):
 						return "Size mismatch, requested size is " + str(size) + " file size is " + len(files[in_context]) + " in line " + str(lineno)
-				print(line.rstrip())
+				out_stream.write(line)
 		elif not in_context:
-			print(line.rstrip())
+			out_stream.write(line)
 	if in_context:
 		return "Include context for \"" + in_context + "\" has not been closed, but end of file"
 	return True

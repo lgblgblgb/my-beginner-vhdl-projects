@@ -10,15 +10,13 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
 entity via6522 is
 	Port (
-		-- Note! I don't use the standard scheme to have Phi2 input as "chip select" and R/Wn line
-		-- but wr_n and rd_n are combined signals of Phi2+read and Phi2+write from CPU!
-		-- Still, we need clock input for counters, etc
 		clk:	in  std_logic;		
 		a:		in  std_logic_vector (3 downto 0);
 		din:	in  std_logic_vector (7 downto 0);
 		dout: out std_logic_vector (7 downto 0);
-		wr_n:	in  std_logic;
-		rd_n: in  std_logic
+		rw_n:	in  std_logic;
+		cs_n: in  std_logic;
+		res_n:in  std_logic
 	);
 end via6522;
 
@@ -28,13 +26,14 @@ type regarray is array(0 to 15) of std_logic_vector(7 downto 0);
 signal reg: regarray;
 
 begin
-	process (rd_n) begin
-		if falling_edge(rd_n) then
-			dout <= reg(conv_integer(a));
+	process (clk, cs_n, rw_n) begin
+		if rising_edge(clk) and cs_n = '0' and rw_n = '1' then
+			--dout <= reg(conv_integer(a));
+			dout <= x"FF";
 		end if;
 	end process;
-	process (wr_n) begin
-		if falling_edge(wr_n) then
+	process (clk, cs_n, rw_n) begin
+		if rising_edge(clk) and cs_n = '0' and rw_n = '0' then
 			reg(conv_integer(a)) <= din;
 		end if;
 	end process;

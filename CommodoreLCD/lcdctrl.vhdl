@@ -68,7 +68,7 @@ port map (
 
 
 -- CPU can (only) write LCD registers ...
-process (reg_clk, reset_n) begin
+process (reg_clk, reset_n, reg_d) begin
 	if reset_n = '0' then
 		font_alt <= '0';
 		font_8 <= '0';
@@ -154,12 +154,13 @@ process (h_cnt(0), reset_n) begin
 				if v_cnt = 176 + 128 + 1 then
 					-- end of screen, set video address to default
 					vid_a_line <= startram_128bytes & startram_low7bits_text;
+					chrrom_a_bus(2 downto 0) <= "000";
 				else
 					-- end of line
 					if chrrom_a_bus(2 downto 0) = "111" then
 						vid_a_line <= vid_a_line + 128;
 					end if;
-					chrrom_a_bus(2 downto 0) <=  chrrom_a_bus(2 downto 0) + 1;
+					chrrom_a_bus(2 downto 0) <= chrrom_a_bus(2 downto 0) + 1;
 				end if;
 				vid_a_buff <= vid_a_line;
 			end if;

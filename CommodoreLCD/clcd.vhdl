@@ -172,7 +172,9 @@ port map (
 );
 
 
-process (ram_oe_n, rom_oe_n, via1_cs_n, via2_cs_n) begin
+-- multiplexing the CPU data input with the selected device's output
+process (cpu_clk, ram_oe_n, rom_oe_n, via1_cs_n, via2_cs_n) begin
+	if rising_edge(cpu_clk) then
 	if ram_oe_n = '0' then
 		cpu_din <= main_ram_dout;
 	elsif rom_oe_n = '0' then
@@ -184,6 +186,7 @@ process (ram_oe_n, rom_oe_n, via1_cs_n, via2_cs_n) begin
 	else
 		cpu_din <= x"FF";
 	end if;
+	end if;
 end process;
 
 
@@ -191,27 +194,27 @@ end process;
 process (clk100mhz) begin
 	if rising_edge(clk100mhz) then
 		clkdiv <= clkdiv + 1;
-		--if fpga_cpu_reset_n = '0' or initial_reset_n = '0' then
-		--	reset_sustain_counter <= (others => '1');
-		--	initial_reset_n <= '1';
-		--	reset_n <= '0';
-		--	rgbled1 <= "001";
-		--else
-		--	initial_reset_n <= '1';
-		--	if reset_sustain_counter /= 0 then
-		--		reset_n <= '0';
-		--		reset_sustain_counter <= reset_sustain_counter - 1;
-		--		rgbled1 <= "100";
-		--	else
-		--		reset_n <= '1';
-		--		rgbled1 <= "010";
-		--		reset_sustain_counter <= (others => '0');
-		--	end if;
-		--end if;
+		if fpga_cpu_reset_n = '0' or initial_reset_n = '0' then
+			reset_sustain_counter <= (others => '1');
+			initial_reset_n <= '1';
+			reset_n <= '0';
+			rgbled1 <= "001";
+		else
+			initial_reset_n <= '1';
+			if reset_sustain_counter /= 0 then
+				reset_n <= '0';
+				reset_sustain_counter <= reset_sustain_counter - 1;
+				rgbled1 <= "100";
+			else
+				reset_n <= '1';
+				rgbled1 <= "010";
+				reset_sustain_counter <= (others => '0');
+			end if;
+		end if;
 	end if;
 end process;
 
-reset_n <= fpga_cpu_reset_n;
+-- reset_n <= fpga_cpu_reset_n;
 
 
 
