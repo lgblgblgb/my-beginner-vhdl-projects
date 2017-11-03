@@ -1,0 +1,1 @@
+../_common/r65c02tc_core.vhdl

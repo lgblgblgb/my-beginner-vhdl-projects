@@ -9,6 +9,7 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
+--use IEEE.NUMERIC_STD.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL; 
 
@@ -22,40 +23,30 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 -- in native mode, but being compatible with stock C-LCD still in 65816 emulation mode (which is the default).
 
 entity lcd_mmu is
-	Port (
-		clk: in std_logic;
-		data_in: in std_logic_vector (7 downto 0);	-- used to write MMU registers by the CPU
-		rw_n: std_logic;		-- from CPU, low = write, high = read access
-		bus_in: in std_logic_vector (15 downto 0);	-- CPU address bus as input
-		bus_translated: out std_logic_vector (17 downto 0);	-- 256K address space of Commodore-LCD
-		ram_oe_n: out std_logic;	-- active low signal for chip select on RAM (128K sized area at phys addr zero)
-		ram_we_n: out std_logic;	-- active low signal for write enable on RAM (128K sized area at phys addr zero)
-		rom_oe_n: out std_logic;	-- active low signal for chip select on ROM (128K sized area, above the RAM)
-		via1_cs_n: out std_logic;	-- active low signal for chip select on VIA1
-		via2_cs_n: out std_logic;	-- active low signal for chip select on VIA2
-		acia_cs_n: out std_logic;	-- active low signal for chip select on ACIA
-		exp_cs_n: out std_logic;	-- active low signal for chip select on I/O expansion area
-		lcd_we_n: out std_logic;	-- active low signal for chip select + write on LCD ctrl registers (they're write only!)
-		vram_we_n: out std_logic	-- active low signal to signal video RAM (lower 32K of memory map) access by the CPU
+	port (
+		clk:			in  std_logic;
+		data_in:		in  std_logic_vector (7 downto 0);	-- used to write MMU registers by the CPU
+		we_n:			in  std_logic;		-- from CPU, low = write
+		bus_in:		in  std_logic_vector (15 downto 0);	-- CPU address bus as input
+		bus_out:		out std_logic_vector (17 downto 0);	-- 256K address space of Commodore-LCD
+		via1_cs_n:	out std_logic;	-- active low signal for chip select on VIA1
+		via2_cs_n:	out std_logic;	-- active low signal for chip select on VIA2
+		acia_cs_n:	out std_logic;	-- active low signal for chip select on ACIA
+		exp_cs_n:	out std_logic;	-- active low signal for chip select on I/O expansion area
+		lcd_cs_n:	out std_logic	-- active low signal for chip select + write on LCD ctrl registers (they're write only!)
 	);
 end lcd_mmu;
 
 architecture rtl of lcd_mmu is
 
 -- MMU registers ...
-signal offset1:    std_logic_vector (7 downto 0);	-- can be written by CPU @ $FD00-$FD7F
-signal offset2:    std_logic_vector (7 downto 0);	-- can be written by CPU @ $FD80-$FDFF
-signal offset3:    std_logic_vector (7 downto 0);	-- can be written by CPU @ $FE00-$FE7F
-signal offset4:    std_logic_vector (7 downto 0);	-- can be written by CPU @ $FE80-$FEFF
-signal offset5:    std_logic_vector (7 downto 0);	-- can be written by CPU @ $FF00-$FF7F
-signal mode:       std_logic_vector (1 downto 0);	-- 
-signal mode_saved: std_logic_vector (1 downto 0);	-- mode is saved if ANY write by CPU $FC00-$FC7F, restored if $FB80-$FBFF
-
---alias  bus_add:    std_logic_vector (7 downto 0) is bus_in(17 downto 10);
-signal bus_add:	 std_logic_vector (7 downto 0);
-alias  bus_rem:    std_logic_vector (9 downto 0) is bus_in( 9 downto  0);
-
-constant TEN_ZEROS:std_logic_vector (9 downto 0) := "0000000000";
+signal offset1:    std_logic_vector (7 downto 0) := x"FF";	-- can be written by CPU @ $FD00-$FD7F
+signal offset2:    std_logic_vector (7 downto 0) := x"FF";	-- can be written by CPU @ $FD80-$FDFF
+signal offset3:    std_logic_vector (7 downto 0) := x"FF";	-- can be written by CPU @ $FE00-$FE7F
+signal offset4:    std_logic_vector (7 downto 0) := x"FF";	-- can be written by CPU @ $FE80-$FEFF
+signal offset5:    std_logic_vector (7 downto 0) := x"FF";	-- can be written by CPU @ $FF00-$FF7F
+signal mode:       std_logic_vector (1 downto 0) := "11";	-- 
+signal mode_saved: std_logic_vector (1 downto 0) := "11";	-- mode is saved if ANY write by CPU $FC00-$FC7F, restored if $FB80-$FBFF
 
 -- Actually, MMU modes cannot be "seen" from outside, so it's totally OK to have any enumeration of the modes ...
 constant KERN_MODE:std_logic_vector (1 downto 0) := "00";
@@ -63,139 +54,66 @@ constant APPL_MODE:std_logic_vector (1 downto 0) := "01";
 constant RAM_MODE: std_logic_vector (1 downto 0) := "10";
 constant TEST_MODE:std_logic_vector (1 downto 0) := "11";
 
-signal mem_cs_n: std_logic;
-signal bus_out: std_logic_vector (17 downto 0);
-
-
 begin
 
-bus_add <= "00" & bus_in(15 downto 10);
-bus_translated <= bus_out;
+bus_out( 9 downto  0) <= bus_in(9 downto 0);	-- lower 10 bits are not altered by the MMU
+bus_out(17 downto 10) <=
+  -- $0000-$0FFF (always fixed)
+   "00" & bus_in(15 downto 10)            when bus_in(15 downto 12) = "0000"                     else
+  -- $1000-$3FFF
+   "00" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "00"  and mode = KERN_MODE else
+  ("00" & bus_in(15 downto 10)) + offset1 when bus_in(15 downto 14) = "00"  and mode = APPL_MODE else
+   "00" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "00"  and mode =  RAM_MODE else
+   offset1                                when bus_in(15 downto 14) = "00"                       else
+  -- $4000-$7FFF
+  ("00" & bus_in(15 downto 10)) + offset5 when bus_in(15 downto 14) = "01"  and mode = KERN_MODE else
+  ("00" & bus_in(15 downto 10)) + offset2 when bus_in(15 downto 14) = "01"  and mode = APPL_MODE else
+   "00" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "01"  and mode =  RAM_MODE else
+   offset2                                when bus_in(15 downto 14) = "01"                       else
+   -- $8000-$BFFF
+   "11" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "10"  and mode = KERN_MODE else
+  ("00" & bus_in(15 downto 10)) + offset3 when bus_in(15 downto 14) = "10"  and mode = APPL_MODE else
+   "00" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "10"  and mode =  RAM_MODE else
+   offset3                                when bus_in(15 downto 14) = "10"                       else
+   -- $F800-$FFFF (always fixed), NOTE: it will be further decoded later (also, mapping to top-kernal does not matter for I/O)
+   -- in fact, we NEED to map addr to kernal in case of I/O not to catch I/O access as RAM access later (see: ram_cs_n)
+   "11" & bus_in(15 downto 10)            when bus_in(15 downto 11) = "11111"                    else
+  -- $C000-$F7FF
+   "11" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "11"  and mode = KERN_MODE else
+  ("00" & bus_in(15 downto 10)) + offset4 when bus_in(15 downto 14) = "11"  and mode = APPL_MODE else
+   "00" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "11"  and mode =  RAM_MODE else
+   offset4                                when bus_in(15 downto 13) = "110"                      else
+   offset5                                when bus_in(15 downto 13) = "111"                      else
+   -- should not be
+   "11" & bus_in(15 downto 10);
 
-process (clk, bus_in, rw_n, data_in) begin
+
+via1_cs_n <= '0' when bus_in(15 downto 7) = (x"F8" & '0') else '1';	-- $F800-$F87F
+via2_cs_n <= '0' when bus_in(15 downto 7) = (x"F8" & '1') else '1';	-- $F880-$F8FF
+exp_cs_n  <= '0' when bus_in(15 downto 7) = (x"F9" & '0') else '1';	-- $F900-$F97F
+acia_cs_n <= '0' when bus_in(15 downto 7) = (x"F9" & '1') else '1';	-- $F980-$F9FF
+lcd_cs_n  <= '0' when bus_in(15 downto 7) = (x"FF" & '1') else '1';	-- $FF80-$FFFF
+
+
+process (clk) begin
 	if rising_edge(clk) then
-		case bus_in(15 downto 14) is
-			when "00" =>	-- *** FIRST 16K of 65xx address space ***
-				if bus_in(13 downto 12) = "00" then
-					bus_out <= "00" & bus_in;	-- first 4K is pass-through
-				else
-					case mode is
-						when KERN_MODE => bus_out <= "00" & bus_in;
-						when APPL_MODE => bus_out <= (bus_add + offset1) & bus_rem;
-						when RAM_MODE  => bus_out <= "00" & bus_in;
-						when TEST_MODE => bus_out <= TEN_ZEROS & offset1;
-						when others =>
-					end case;
-				end if;
-				mem_cs_n <= '0';
-			when "01" =>	-- *** SECOND 16K of 65xx address space ***
-				case mode is
-					when KERN_MODE => bus_out <= (bus_add + offset5) & bus_rem;
-					when APPL_MODE => bus_out <= (bus_add + offset2) & bus_rem;
-					when RAM_MODE  => bus_out <= "00" & bus_in;
-					when TEST_MODE => bus_out <= TEN_ZEROS & offset2;
-					when others =>
-				end case;
-				mem_cs_n <= '0';
-			when "10" =>	-- *** THIRD 16K of 65xx address space ***
-				case mode is
-					when KERN_MODE => bus_out <= "11" & bus_in;
-					when APPL_MODE => bus_out <= (bus_add + offset3) & bus_rem;
-					when RAM_MODE  => bus_out <= "00" & bus_in;
-					when TEST_MODE => bus_out <= TEN_ZEROS & offset3;
-					when others =>
-				end case;
-				mem_cs_n <= '0';
-			when "11" =>	-- *** FOURTH 16K of 65xx address space ***
-				if bus_in(13 downto 11) = "111" then	-- upper 2K: (15 downto 14) is already "11" here!
-					bus_out <= "11" & bus_in;	-- "redirected" to the top of KERNAL (if the decoded area is I/O: no problem as the "new" MS bits won't used)
-					if rw_n = '0' or bus_in(10 downto 9) = "00" then
-						-- write access here is always I/O, but also read access for $F800-$F9FF is I/O!
-						mem_cs_n <= '1';	-- not a memory access, it's I/O!
-					else
-						mem_cs_n <= '0';
-					end if;
-				else
-					case mode is
-						when KERN_MODE => bus_out <= "11" & bus_in;
-						when APPL_MODE => bus_out <= (bus_add + offset4) & bus_rem;
-						when RAM_MODE  => bus_out <= "00" & bus_in;
-						when TEST_MODE => bus_out <= TEN_ZEROS & offset4;	-- btw this is wrong, however TEST mode is unusable for anything other than HW testing
-						when others =>
-					end case;
-					mem_cs_n <= '0';
-				end if;
-			when others =>
-		end case;
-		-- Produce various memory access related signals
-		if mem_cs_n = '0' and rw_n = '1' and bus_out(17) = '0' then
-			ram_oe_n <= '0';
-		else
-			ram_oe_n <= '1';
-		end if;
-		if mem_cs_n = '0' and rw_n = '0' and bus_out(17) = '0' then
-			ram_we_n <= '0';
-		else
-			ram_we_n <= '1';
-		end if;
-		if mem_cs_n = '0' and rw_n = '1' and bus_out(17) = '1' then
-			rom_oe_n <= '0';
-		else
-			rom_oe_n <= '1';
-		end if;
-		if mem_cs_n = '0' and rw_n = '0' and bus_out(17 downto 15) = "000" then
-			vram_we_n <= '0';
-		else
-			vram_we_n <= '1';
-		end if;
-		-- Produce I/O select signals for devices (note: LCD ctrl is write only in this list, but it's decoded that way
-		-- already, with mem_cs_n signal!)
-		if mem_cs_n = '1' and bus_out(10 downto 7) = "0000" then
-			via1_cs_n <= '0';
-		else
-			via1_cs_n <= '1';
-		end if;
-		if mem_cs_n = '1' and bus_out(10 downto 7) = "0001" then
-			via2_cs_n <= '0';
-		else
-			via2_cs_n <= '1';
-		end if;
-		if mem_cs_n = '1' and bus_out(10 downto 7) = "0010" then
-			exp_cs_n <= '0';
-		else
-			exp_cs_n <= '1';
-		end if;
-		if mem_cs_n = '1' and bus_out(10 downto 7) = "0011" then
-			acia_cs_n <= '0';
-		else
-			acia_cs_n <= '1';
-		end if;
-		if mem_cs_n = '1' and bus_out(10 downto 7) = "1111" then
-			lcd_we_n <= '0';
-		else
-			lcd_we_n <= '1';
-		end if;
-		-- The MMU controller itself, handle their registers
-		-- NOTE: mem_cs_n signal is already decoded in the way, that only write access is possible here, no problem!
-		if mem_cs_n = '1' then
-			case bus_out(10 downto 7) is
-				when "0100" => mode <= KERN_MODE;
-				when "0101" => mode <= APPL_MODE;
-				when "0110" => mode <= RAM_MODE;
-				when "0111" => mode <= mode_saved;
-				when "1000" => mode_saved <= mode;
-				when "1001" => mode <= TEST_MODE;
-				when "1010" => offset1 <= data_in;
-				when "1011" => offset2 <= data_in;
-				when "1100" => offset3 <= data_in;
-				when "1101" => offset4 <= data_in;
-				when "1110" => offset5 <= data_in;
-				when others =>
+		if we_n = '0' then
+			case bus_in(15 downto 7) is
+				when x"FA" & '0' => mode <= KERN_MODE;
+				when x"FA" & '1' => mode <= APPL_MODE;
+				when x"FB" & '0' => mode <=  RAM_MODE;
+				when x"FB" & '1' => mode <= mode_saved;
+				when x"FC" & '0' => mode_saved <= mode;
+				when x"FC" & '1' => mode <= TEST_MODE;
+				when x"FD" & '0' => offset1 <= data_in;
+				when x"FD" & '1' => offset2 <= data_in;
+				when x"FE" & '0' => offset3 <= data_in;
+				when x"FE" & '1' => offset4 <= data_in;
+				when x"FF" & '0' => offset5 <= data_in;
+				when others => null;
 			end case;
 		end if;
 	end if;
 end process;
-
-
 
 end rtl;
