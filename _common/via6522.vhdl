@@ -9,12 +9,12 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
 
 entity via6522 is
-	Port (
+	port (
 		clk:	in  std_logic;		
 		a:		in  std_logic_vector (3 downto 0);
 		din:	in  std_logic_vector (7 downto 0);
 		dout: out std_logic_vector (7 downto 0);
-		rw_n:	in  std_logic;
+		wr_n:	in  std_logic;
 		cs_n: in  std_logic;
 		res_n:in  std_logic
 	);
@@ -26,15 +26,18 @@ type regarray is array(0 to 15) of std_logic_vector(7 downto 0);
 signal reg: regarray;
 
 begin
-	process (clk, cs_n, rw_n) begin
-		if rising_edge(clk) and cs_n = '0' and rw_n = '1' then
-			--dout <= reg(conv_integer(a));
-			dout <= x"FF";
+	process (clk) begin
+		if rising_edge(clk) then
+			if cs_n = '0' and wr_n = '1' then
+				dout <= reg(conv_integer(a));
+			end if;
 		end if;
 	end process;
-	process (clk, cs_n, rw_n) begin
-		if rising_edge(clk) and cs_n = '0' and rw_n = '0' then
-			reg(conv_integer(a)) <= din;
+	process (clk) begin
+		if rising_edge(clk) then
+			if cs_n = '0' and wr_n = '0' then
+				reg(conv_integer(a)) <= din;
+			end if;
 		end if;
 	end process;
 end rtl;
