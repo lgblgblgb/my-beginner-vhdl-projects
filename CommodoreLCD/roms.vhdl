@@ -6,8 +6,7 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.STD_LOGIC_ARITH.ALL;
-use IEEE.STD_LOGIC_UNSIGNED.ALL;
+use IEEE.NUMERIC_STD.ALL;
 
 
 entity main_ROM is
@@ -41,7 +40,7 @@ constant
 begin
 	process (clk) begin
 		if rising_edge(clk) then
-			dout <= rom(conv_integer(a));
+			dout <= rom(to_integer(unsigned(a)));
 		end if;
 	end process;
 end rtl;
@@ -49,8 +48,8 @@ end rtl;
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.STD_LOGIC_ARITH.ALL;
-use IEEE.STD_LOGIC_UNSIGNED.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
 
 entity chrgen_ROM is
 	Port (
@@ -71,7 +70,7 @@ constant
 begin
 	process (clk) begin
 		if rising_edge(clk) then
-			dout <= rom(conv_integer(a));
+			dout <= rom(to_integer(unsigned(a)));
 		end if;
 	end process;
 end rtl;

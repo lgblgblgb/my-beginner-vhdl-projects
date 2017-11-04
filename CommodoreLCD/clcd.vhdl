@@ -6,8 +6,10 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.STD_LOGIC_ARITH.ALL;
-use IEEE.STD_LOGIC_UNSIGNED.ALL; 
+--use IEEE.STD_LOGIC_ARITH.ALL;
+--use IEEE.STD_LOGIC_UNSIGNED.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
 
 entity CLCD is
 	port (
@@ -31,7 +33,7 @@ end CLCD;
 
 architecture rtl of CLCD is
 
-signal clkdiv:	std_logic_vector(31 downto 0);
+signal clkdiv:	unsigned(31 downto 0);
 signal cpu_clk: std_logic;
 signal pix_clk: std_logic;
 
@@ -125,10 +127,10 @@ port map (
 MMU: entity work.lcd_mmu
 port map (
 	clk => cpu_clk,
-	data_in => cpu_dout,
+	data_in => unsigned(cpu_dout),
 	we_n => cpu_wr_n,
-	bus_in => bus_a_untranslated(15 downto 0),
-	bus_out => bus_a,
+	bus_in => unsigned(bus_a_untranslated(15 downto 0)),
+	bus_translated => bus_a,
 	via1_cs_n => via1_cs_n,
 	via2_cs_n => via2_cs_n,
 	acia_cs_n => acia_cs_n,

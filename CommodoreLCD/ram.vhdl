@@ -6,8 +6,7 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.STD_LOGIC_ARITH.ALL;
-use IEEE.STD_LOGIC_UNSIGNED.ALL;
+use IEEE.NUMERIC_STD.ALL;
 
 
 entity main_RAM is
@@ -24,8 +23,8 @@ entity main_RAM is
 end main_RAM;
 
 architecture rtl of main_RAM is
-type ramarray is array(0 to 131071) of std_logic_vector(7 downto 0);
-signal mem: ramarray;
+type ramarray_t is array(0 to 131071) of std_logic_vector(7 downto 0);
+signal mem: ramarray_t;
 --signal outreg: std_logic_vector(7 downto 0);
 --signal outreg2: std_logic_vector(7 downto 0);
 begin
@@ -35,14 +34,14 @@ begin
 
 	process (clk) begin
 		if rising_edge(clk) then
-			dout <= mem(conv_integer(a));
+			dout <= mem(to_integer(unsigned(a)));
 		end if;
 	end process;
 
 	process (clk) begin
 		if rising_edge(clk) then
 			if we_n = '0' then
-				mem(conv_integer(a)) <= din;
+				mem(to_integer(unsigned(a))) <= din;
 			end if;
 		end if;
 	end process;
@@ -58,8 +57,7 @@ end rtl;
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.STD_LOGIC_ARITH.ALL;
-use IEEE.STD_LOGIC_UNSIGNED.ALL;
+use IEEE.NUMERIC_STD.ALL;
 
 
 entity shadow_RAM is
@@ -77,18 +75,18 @@ entity shadow_RAM is
 end shadow_RAM;
 
 architecture rtl of shadow_RAM is
-type ramarray is array(0 to 32767) of std_logic_vector(7 downto 0);
-signal mem: ramarray;
+type ramarray_t is array(0 to 32767) of std_logic_vector(7 downto 0);
+signal mem: ramarray_t;
 begin
 	process (read_clk) begin
 		if rising_edge(read_clk) then
-			read_dout <= mem(conv_integer(read_a));
+			read_dout <= mem(to_integer(unsigned(read_a)));
 		end if;
 	end process;
 	process (write_clk) begin
 		if rising_edge(write_clk) then
 			if we_n = '0' then
-				mem(conv_integer(write_a)) <= write_din;
+				mem(to_integer(unsigned(write_a))) <= write_din;
 			end if;
 		end if;
 	end process;

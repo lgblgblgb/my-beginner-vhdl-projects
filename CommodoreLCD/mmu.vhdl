@@ -7,11 +7,12 @@
 -- My attempt to implement "5705 LCD MMU" chip in VHDL according to my findings I could also write the
 -- first working software emulator for Commodore-LCD back to 2014.
 
+-- I'm struggling to understand unsigned vs std_logic_vector in case of "+" operator. It seems
+-- I have to use numeric_std otherwise this does not work at all ...
+
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
---use IEEE.NUMERIC_STD.ALL;
-use IEEE.STD_LOGIC_ARITH.ALL;
-use IEEE.STD_LOGIC_UNSIGNED.ALL; 
+use IEEE.NUMERIC_STD.ALL;
 
 -- NOTE: Commodore LCD's MMU does not have RESET input, the programmer should initialize it
 -- This is not a problem, as the high memory area, where 65xx reset vector and some initial code
@@ -25,10 +26,10 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 entity lcd_mmu is
 	port (
 		clk:			in  std_logic;
-		data_in:		in  std_logic_vector (7 downto 0);	-- used to write MMU registers by the CPU
+		data_in:		in  unsigned (7 downto 0);	-- used to write MMU registers by the CPU
 		we_n:			in  std_logic;		-- from CPU, low = write
-		bus_in:		in  std_logic_vector (15 downto 0);	-- CPU address bus as input
-		bus_out:		out std_logic_vector (17 downto 0);	-- 256K address space of Commodore-LCD
+		bus_in:		in  unsigned (15 downto 0);	-- CPU address bus as input
+		bus_translated:		out std_logic_vector (17 downto 0);	-- 256K address space of Commodore-LCD
 		via1_cs_n:	out std_logic;	-- active low signal for chip select on VIA1
 		via2_cs_n:	out std_logic;	-- active low signal for chip select on VIA2
 		acia_cs_n:	out std_logic;	-- active low signal for chip select on ACIA
@@ -39,53 +40,57 @@ end lcd_mmu;
 
 architecture rtl of lcd_mmu is
 
+signal bus_out: unsigned(17 downto 0);
+
 -- MMU registers ...
-signal offset1:    std_logic_vector (7 downto 0) := x"FF";	-- can be written by CPU @ $FD00-$FD7F
-signal offset2:    std_logic_vector (7 downto 0) := x"FF";	-- can be written by CPU @ $FD80-$FDFF
-signal offset3:    std_logic_vector (7 downto 0) := x"FF";	-- can be written by CPU @ $FE00-$FE7F
-signal offset4:    std_logic_vector (7 downto 0) := x"FF";	-- can be written by CPU @ $FE80-$FEFF
-signal offset5:    std_logic_vector (7 downto 0) := x"FF";	-- can be written by CPU @ $FF00-$FF7F
-signal mode:       std_logic_vector (1 downto 0) := "11";	-- 
-signal mode_saved: std_logic_vector (1 downto 0) := "11";	-- mode is saved if ANY write by CPU $FC00-$FC7F, restored if $FB80-$FBFF
+signal offset1:    unsigned (7 downto 0) := x"FF";	-- can be written by CPU @ $FD00-$FD7F
+signal offset2:    unsigned (7 downto 0) := x"FF";	-- can be written by CPU @ $FD80-$FDFF
+signal offset3:    unsigned (7 downto 0) := x"FF";	-- can be written by CPU @ $FE00-$FE7F
+signal offset4:    unsigned (7 downto 0) := x"FF";	-- can be written by CPU @ $FE80-$FEFF
+signal offset5:    unsigned (7 downto 0) := x"FF";	-- can be written by CPU @ $FF00-$FF7F
+signal mode:       unsigned (1 downto 0) := "11";	-- 
+signal mode_saved: unsigned (1 downto 0) := "11";	-- mode is saved if ANY write by CPU $FC00-$FC7F, restored if $FB80-$FBFF
 
 -- Actually, MMU modes cannot be "seen" from outside, so it's totally OK to have any enumeration of the modes ...
-constant KERN_MODE:std_logic_vector (1 downto 0) := "00";
-constant APPL_MODE:std_logic_vector (1 downto 0) := "01";
-constant RAM_MODE: std_logic_vector (1 downto 0) := "10";
-constant TEST_MODE:std_logic_vector (1 downto 0) := "11";
+constant KERN_MODE:unsigned (1 downto 0) := "00";
+constant APPL_MODE:unsigned (1 downto 0) := "01";
+constant RAM_MODE: unsigned (1 downto 0) := "10";
+constant TEST_MODE:unsigned (1 downto 0) := "11";
 
 begin
+
+bus_translated <= std_logic_vector(bus_out);
 
 bus_out( 9 downto  0) <= bus_in(9 downto 0);	-- lower 10 bits are not altered by the MMU
 bus_out(17 downto 10) <=
   -- $0000-$0FFF (always fixed)
-   "00" & bus_in(15 downto 10)            when bus_in(15 downto 12) = "0000"                     else
+  "00" & bus_in(15 downto 10)           when bus_in(15 downto 12) = "0000"                     else
   -- $1000-$3FFF
-   "00" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "00"  and mode = KERN_MODE else
-  ("00" & bus_in(15 downto 10)) + offset1 when bus_in(15 downto 14) = "00"  and mode = APPL_MODE else
-   "00" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "00"  and mode =  RAM_MODE else
-   offset1                                when bus_in(15 downto 14) = "00"                       else
+  "00" & bus_in(15 downto 10)           when bus_in(15 downto 14) = "00"  and mode = KERN_MODE else
+         bus_in(15 downto 10) + offset1 when bus_in(15 downto 14) = "00"  and mode = APPL_MODE else
+  "00" & bus_in(15 downto 10)           when bus_in(15 downto 14) = "00"  and mode =  RAM_MODE else
+  offset1                               when bus_in(15 downto 14) = "00"                       else
   -- $4000-$7FFF
-  ("00" & bus_in(15 downto 10)) + offset5 when bus_in(15 downto 14) = "01"  and mode = KERN_MODE else
-  ("00" & bus_in(15 downto 10)) + offset2 when bus_in(15 downto 14) = "01"  and mode = APPL_MODE else
-   "00" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "01"  and mode =  RAM_MODE else
-   offset2                                when bus_in(15 downto 14) = "01"                       else
-   -- $8000-$BFFF
-   "11" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "10"  and mode = KERN_MODE else
-  ("00" & bus_in(15 downto 10)) + offset3 when bus_in(15 downto 14) = "10"  and mode = APPL_MODE else
-   "00" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "10"  and mode =  RAM_MODE else
-   offset3                                when bus_in(15 downto 14) = "10"                       else
-   -- $F800-$FFFF (always fixed), NOTE: it will be further decoded later (also, mapping to top-kernal does not matter for I/O)
-   -- in fact, we NEED to map addr to kernal in case of I/O not to catch I/O access as RAM access later (see: ram_cs_n)
-   "11" & bus_in(15 downto 10)            when bus_in(15 downto 11) = "11111"                    else
+         bus_in(15 downto 10) + offset5 when bus_in(15 downto 14) = "01"  and mode = KERN_MODE else
+         bus_in(15 downto 10) + offset2 when bus_in(15 downto 14) = "01"  and mode = APPL_MODE else
+  "00" & bus_in(15 downto 10)           when bus_in(15 downto 14) = "01"  and mode =  RAM_MODE else
+  offset2                               when bus_in(15 downto 14) = "01"                       else
+  -- $8000-$BFFF
+  "11" & bus_in(15 downto 10)           when bus_in(15 downto 14) = "10"  and mode = KERN_MODE else
+         bus_in(15 downto 10) + offset3 when bus_in(15 downto 14) = "10"  and mode = APPL_MODE else
+  "00" & bus_in(15 downto 10)           when bus_in(15 downto 14) = "10"  and mode =  RAM_MODE else
+  offset3                               when bus_in(15 downto 14) = "10"                       else
+  -- $F800-$FFFF (always fixed), NOTE: it will be further decoded later (also, mapping to top-kernal does not matter for I/O)
+  -- in fact, we NEED to map addr to kernal in case of I/O not to catch I/O access as RAM access later (see: ram_cs_n)
+  "11" & bus_in(15 downto 10)           when bus_in(15 downto 11) = "11111"                    else
   -- $C000-$F7FF
-   "11" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "11"  and mode = KERN_MODE else
-  ("00" & bus_in(15 downto 10)) + offset4 when bus_in(15 downto 14) = "11"  and mode = APPL_MODE else
-   "00" & bus_in(15 downto 10)            when bus_in(15 downto 14) = "11"  and mode =  RAM_MODE else
-   offset4                                when bus_in(15 downto 13) = "110"                      else
-   offset5                                when bus_in(15 downto 13) = "111"                      else
-   -- should not be
-   "11" & bus_in(15 downto 10);
+  "11" & bus_in(15 downto 10)           when bus_in(15 downto 14) = "11"  and mode = KERN_MODE else
+         bus_in(15 downto 10) + offset4 when bus_in(15 downto 14) = "11"  and mode = APPL_MODE else
+  "00" & bus_in(15 downto 10)           when bus_in(15 downto 14) = "11"  and mode =  RAM_MODE else
+  offset4                               when bus_in(15 downto 13) = "110"                      else
+  offset5                               when bus_in(15 downto 13) = "111"                      else
+  -- should not be
+  "11" & bus_in(15 downto 10);
 
 
 via1_cs_n <= '0' when bus_in(15 downto 7) = (x"F8" & '0') else '1';	-- $F800-$F87F

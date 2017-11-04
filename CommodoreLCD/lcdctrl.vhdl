@@ -57,6 +57,26 @@ signal video_byte: std_logic_vector(7 downto 0);
 signal h_cnt : std_logic_vector(9 downto 0);
 signal v_cnt : std_logic_vector(9 downto 0);
 
+-- Singal parameters
+
+--constant cfg_vsync_polarity:	std_logic := '0';
+--constant cfg_hsync_polarity:	std_logic := '0';
+--constant cfg_h_start_disp:	unsigned(10 downto 0) := 80;
+--constant cfg_h_end_disp:		unsigned(10 downto 0) := 80 + 480 - 1;
+--constant cfg_h_end_visible:	unsigned(10 downto 0) := 640 - 1;
+--constant cfg_h_start_sync:	unsigned(10 downto 0) := 640 + 16 + 1;
+--constant cfg_h_end_sync:		unsigned(10 downto 0) := 640 + 16 + 96 - 1;
+--constant cfg_h_end_scan:		unsigned(10 downto 0) := 799;
+--constant cfg_v_start_disp:	unsigned(10 downto 0) := 176;
+--constant cfg_v_end_disp:		unsigned(10 downto 0) := 176 + 128 - 1;
+--constant cfg_v_end_visible:	unsigned(10 downto 0) := 480 - 1;
+--constant cfg_v_start_sync:	unsigned(10 downto 0) := 480 + 10;
+--constant cfg_v_end_sync:		unsigned(10 downto 0) := 480 + 11;
+--constant cfg_v_end_scan:		unsigned(10 downto 0) := 524;
+
+
+
+
 begin
 
 -- Character generator ROM is private to the LCD controller on Commodore LCD.
